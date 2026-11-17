@@ -920,8 +920,20 @@ def seed():
 
 init_db()
 
+# On fresh cloud deploys (CONNECT_SEED_DEMO=1) fill an empty database with demo users
+if os.environ.get("CONNECT_SEED_DEMO") == "1":
+    with sqlite3.connect(DB_PATH) as _db:
+        if _db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
+            seed()
+
 if __name__ == "__main__":
     if "--seed" in sys.argv:
         seed()
     else:
-        socketio.run(app, debug=True)
+        # FLASK_DEBUG=0 turns off debug mode (required when exposed to the internet)
+        debug = os.environ.get("FLASK_DEBUG", "1") == "1"
+        # cloud hosts (Render/Railway) set PORT and need 0.0.0.0; locally stay on 127.0.0.1
+        port = int(os.environ.get("PORT", "5000"))
+        host = "0.0.0.0" if "PORT" in os.environ else "127.0.0.1"
+        socketio.run(app, host=host, port=port, debug=debug,
+                     allow_unsafe_werkzeug=not debug)

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: connecto
+    runtime: python
+    plan: free
+    rootDir: connect_app
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CONNECT_SEED_DEMO
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.12.6"

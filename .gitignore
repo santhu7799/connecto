@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+venv/
+connect_app/connect.db
+connect_app/static/uploads/
