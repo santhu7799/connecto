@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Join{% endblock %}
+{% block content %}
+<div class="card form-card">
+  <h2>Create your profile</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Username <input name="username" value="{{ form.get('username', '') }}" required minlength="3" maxlength="20" pattern="[A-Za-z0-9]+" placeholder="letters & numbers"></label>
+    <label>Password <input name="password" type="password" required minlength="8"></label>
+    <label>Your name <input name="display_name" value="{{ form.get('display_name', '') }}" required maxlength="40"></label>
+    <div class="row">
+      <label>Age <input name="age" type="number" min="18" max="120" value="{{ form.get('age', '') }}" required></label>
+      <label>City <input name="city" value="{{ form.get('city', '') }}" maxlength="60"></label>
+    </div>
+    <label>Interests <small>(comma separated)</small>
+      <input name="interests" value="{{ form.get('interests', '') }}" placeholder="music, hiking, coding, movies">
+    </label>
+    <button class="btn">Join Connect</button>
+  </form>
+  <p class="muted">Already a member? <a href="{{ url_for('login') }}">Log in</a></p>
+</div>
+{% endblock %}

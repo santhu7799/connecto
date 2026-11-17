@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+{% set u = g.user %}
+<div class="card form-card">
+  <div class="person-head">
+    {{ avatar(u, "xl") }}
+    <div><h2>My profile</h2><div class="muted">@{{ u.username }} · {{ u.age }}</div></div>
+  </div>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Profile photo <small>(JPG, PNG, GIF or WebP, max 4&nbsp;MB)</small>
+      <input type="file" name="photo" accept="image/png,image/jpeg,image/gif,image/webp">
+    </label>
+    {% if u.photo %}
+    <label class="check"><input type="checkbox" name="remove_photo" value="1"> Remove current photo</label>
+    {% endif %}
+    <label>Name <input name="display_name" value="{{ u.display_name }}" required maxlength="40"></label>
+    <label>City <input name="city" value="{{ u.city }}" maxlength="60"></label>
+    <label>Bio <textarea name="bio" rows="4" maxlength="500" placeholder="Tell people what you're like and what kind of friends you're looking for">{{ u.bio }}</textarea></label>
+    <label>Interests <small>(comma separated)</small>
+      <input name="interests" value="{{ u.interests }}" placeholder="music, hiking, coding">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="random_calls" value="1" {% if u.random_calls %}checked{% endif %}>
+      Available for RandomCall <small>— let the app match you with random people for voice calls</small>
+    </label>
+    <button class="btn">Save profile</button>
+  </form>
+</div>
+{% endblock %}

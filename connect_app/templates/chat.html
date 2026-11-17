@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Chat with {{ other.display_name }}{% endblock %}
+{% block content %}
+<div class="card chat">
+  <div class="chat-head">
+    <a href="{{ url_for('friends') }}" class="muted">←</a>
+    {{ avatar(other, "md", presence=True) }}
+    <div class="grow">
+      <a class="name" href="{{ url_for('view_user', user_id=other.id) }}">{{ other.display_name }}</a>
+      <div class="muted presence-text {{ 'on' if is_online(other.id) }}" data-presence-text="{{ other.id }}">
+        {{ 'Online' if is_online(other.id) else 'Offline' }}</div>
+    </div>
+    <button class="call-btn" id="btn-voice-call" title="Voice call" aria-label="Voice call">📞</button>
+    <button class="call-btn" id="btn-video-call" title="Video call" aria-label="Video call">🎥</button>
+  </div>
+  <div id="messages" class="messages"><p class="muted center" id="empty">Loading…</p></div>
+  <form id="send" class="chat-input" autocomplete="off">
+    <input id="body" maxlength="1000" placeholder="Write a message…" required autofocus>
+    <button class="btn">Send</button>
+  </form>
+</div>
+
+<script>
+(() => {
+  const url = {{ url_for('chat_messages', user_id=other.id) | tojson }};
+  const csrf = {{ csrf | tojson }};
+  const box = document.getElementById("messages");
+  const empty = document.getElementById("empty");
+  const input = document.getElementById("body");
+  const seen = new Set();
+  const myTicks = new Map();        // message id -> tick element (my messages)
+  let lastId = 0, loaded = false;
+
+  function add(m) {
+    if (seen.has(m.id)) return;
+    seen.add(m.id);
+    lastId = Math.max(lastId, m.id);
+    empty.style.display = "none";
+    const row = document.createElement("div");
+    row.className = "msg " + (m.mine ? "mine" : "theirs");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = m.body;            // textContent = safe from HTML injection
+    const time = document.createElement("div");
+    time.className = "time";
+    time.textContent = m.time;
+    if (m.mine) {                           // delivery status: ✓ sent, ✓✓ read
+      const tick = document.createElement("span");
+      tick.className = "tick" + (m.read ? " read" : "");
+      tick.textContent = m.read ? " ✓✓" : " ✓";
+      time.append(tick);
+      myTicks.set(m.id, tick);
+    }
+    row.append(bubble, time);
+    box.append(row);
+  }
+
+  function markRead(upTo) {
+    myTicks.forEach((tick, id) => {
+      if (id <= upTo && !tick.classList.contains("read")) {
+        tick.classList.add("read");
+        tick.textContent = " ✓✓";
+      }
+    });
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch(url + "?after=" + lastId);
+      if (!r.ok) return;
+      const { messages, read_up_to } = await r.json();
+      messages.forEach(add);
+      markRead(read_up_to);
+      if (messages.length) box.scrollTop = box.scrollHeight;
+      if (!loaded) { loaded = true; if (!seen.size) empty.textContent = "No messages yet. Say hi! 👋"; }
+    } catch (e) { /* offline – try again next tick */ }
+  }
+
+  document.getElementById("send").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = "";
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+      body: JSON.stringify({ body })
+    });
+    if (r.ok) { add((await r.json()).message); box.scrollTop = box.scrollHeight; }
+    else { input.value = body; alert("Couldn't send message."); }
+  });
+
+  poll();
+  setInterval(poll, 2000);
+
+  // voice / video call buttons (ConnectCall is defined in call.js)
+  const callPeer = {
+    id: {{ other.id | tojson }},
+    name: {{ other.display_name | tojson }},
+    age: {{ other.age | tojson }},
+    photo: {{ (url_for('static', filename='uploads/' ~ other.photo) if other.photo else '') | tojson }},
+    hue: {{ (other.id * 67) % 360 }},
+    initial: {{ other.display_name[:1] | upper | tojson }}
+  };
+  document.getElementById("btn-voice-call").addEventListener("click", () => window.ConnectCall.start(callPeer, false));
+  document.getElementById("btn-video-call").addEventListener("click", () => window.ConnectCall.start(callPeer, true));
+})();
+</script>
+{% endblock %}

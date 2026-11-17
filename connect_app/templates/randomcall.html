@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}RandomCall{% endblock %}
+{% block content %}
+<div class="card rc">
+  {% if not g.user.random_calls %}
+  <div class="flash flash-info">Random calls are turned off for your account.
+    Enable them in <a href="{{ url_for('edit_profile') }}">your profile</a> to start calling.</div>
+  {% endif %}
+
+  <!-- IDLE -->
+  <section id="rc-idle" class="rc-state">
+    <div class="rc-big">🎙️</div>
+    <h2>RandomCall</h2>
+    <p class="muted">Get matched with a random person who's online right now and talk over a live voice call.
+      No friendship needed — just press the button.</p>
+    <button class="btn rc-cta" id="btn-start" {% if not g.user.random_calls %}disabled{% endif %}>Start a random call</button>
+    <p class="muted rc-note" id="rc-error" hidden></p>
+  </section>
+
+  <!-- SEARCHING -->
+  <section id="rc-search" class="rc-state" hidden>
+    <div class="rc-spinner"></div>
+    <h2>Looking for someone…</h2>
+    <p class="muted">Hang tight — we're connecting you with the next available person.</p>
+    <button class="btn btn-ghost" id="btn-cancel">Cancel</button>
+  </section>
+
+  <!-- IN CALL -->
+  <section id="rc-call" class="rc-state" hidden>
+    <div class="rc-peer">
+      <span class="avatar avatar-xl" id="peer-avatar"></span>
+      <h2 id="peer-name"></h2>
+      <div class="muted" id="peer-city"></div>
+      <div class="rc-status" id="call-status">Connecting audio…</div>
+      <div class="rc-timer" id="call-timer" hidden>00:00</div>
+    </div>
+    <div class="rc-controls">
+      <button class="rc-ctl" id="btn-mute" title="Mute / unmute">🎤<small>Mute</small></button>
+      <button class="rc-ctl rc-end" id="btn-end" title="End call">📞<small>End</small></button>
+      <button class="rc-ctl" id="btn-next" title="Find another person">⏭️<small>Next</small></button>
+    </div>
+  </section>
+
+  <audio id="remote-audio" autoplay></audio>
+</div>
+
+<script>
+(() => {
+  const sock = window.sock;
+  const $ = (id) => document.getElementById(id);
+  const states = { idle: $("rc-idle"), search: $("rc-search"), call: $("rc-call") };
+  const errorEl = $("rc-error"), statusEl = $("call-status"), timerEl = $("call-timer");
+  const remoteAudio = $("remote-audio");
+
+  let pc = null, localStream = null, room = null, muted = false;
+  let timerHandle = null, callSeconds = 0, pendingCandidates = [];
+
+  function show(name) {
+    Object.entries(states).forEach(([k, el]) => { el.hidden = k !== name; });
+  }
+  function setError(msg) {
+    errorEl.textContent = msg || "";
+    errorEl.hidden = !msg;
+  }
+
+  function startTimer() {
+    callSeconds = 0;
+    timerEl.hidden = false;
+    timerEl.textContent = "00:00";
+    timerHandle = setInterval(() => {
+      callSeconds++;
+      const m = String(Math.floor(callSeconds / 60)).padStart(2, "0");
+      const s = String(callSeconds % 60).padStart(2, "0");
+      timerEl.textContent = m + ":" + s;
+    }, 1000);
+  }
+  function stopTimer() { clearInterval(timerHandle); timerHandle = null; timerEl.hidden = true; }
+
+  async function getMic() {
+    if (localStream) return localStream;
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return localStream;
+  }
+
+  function cleanupCall() {
+    stopTimer();
+    pendingCandidates = [];
+    if (pc) { pc.onicecandidate = pc.ontrack = pc.onconnectionstatechange = null; pc.close(); pc = null; }
+    remoteAudio.srcObject = null;
+    room = null;
+  }
+
+  function releaseMic() {
+    if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
+    muted = false;
+    $("btn-mute").classList.remove("active");
+  }
+
+  async function startSearch() {
+    setError("");
+    try {
+      await getMic();   // ask for the mic up front so matches connect instantly
+    } catch (e) {
+      setError("Microphone access is required for voice calls. Please allow it and try again.");
+      return;
+    }
+    show("search");
+    sock.emit("rc_find");
+  }
+
+  function endCall(requeue) {
+    sock.emit("rc_hangup");
+    cleanupCall();
+    if (requeue) { show("search"); sock.emit("rc_find"); }
+    else { releaseMic(); show("idle"); }
+  }
+
+  // ---------------- socket events ----------------
+  sock.on("rc_error", (d) => { show("idle"); releaseMic(); setError(d.message); });
+  sock.on("rc_waiting", () => { /* stay on the searching screen */ });
+
+  sock.on("rc_match", async (d) => {
+    room = d.room;
+    // peer card
+    const av = $("peer-avatar");
+    av.style.setProperty("--h", d.peer.hue);
+    av.innerHTML = d.peer.photo ? '<img alt="">' : d.peer.initial;
+    if (d.peer.photo) av.querySelector("img").src = d.peer.photo;
+    $("peer-name").textContent = d.peer.name + ", " + d.peer.age;
+    $("peer-city").textContent = "📍 " + d.peer.city;
+    statusEl.textContent = "Connecting audio…";
+    show("call");
+
+    try {
+      const stream = await getMic();
+      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      stream.getTracks().forEach((t) => { t.enabled = !muted; pc.addTrack(t, stream); });
+      pc.onicecandidate = (e) => { if (e.candidate) sock.emit("rc_signal", { candidate: e.candidate }); };
+      pc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
+      pc.onconnectionstatechange = () => {
+        if (!pc) return;
+        if (pc.connectionState === "connected") {
+          statusEl.textContent = "Connected";
+          if (!timerHandle) startTimer();
+        } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
+          statusEl.textContent = "Connection lost";
+        }
+      };
+      if (d.initiator) {
+        await pc.setLocalDescription(await pc.createOffer());
+        sock.emit("rc_signal", { sdp: pc.localDescription });
+      }
+    } catch (e) {
+      endCall(false);
+      setError("Couldn't start the call: " + e.message);
+    }
+  });
+
+  sock.on("rc_signal", async (d) => {
+    if (!pc) return;
+    try {
+      if (d.sdp) {
+        await pc.setRemoteDescription(d.sdp);
+        for (const c of pendingCandidates) await pc.addIceCandidate(c);
+        pendingCandidates = [];
+        if (d.sdp.type === "offer") {
+          await pc.setLocalDescription(await pc.createAnswer());
+          sock.emit("rc_signal", { sdp: pc.localDescription });
+        }
+      } else if (d.candidate) {
+        if (pc.remoteDescription) await pc.addIceCandidate(d.candidate);
+        else pendingCandidates.push(d.candidate);
+      }
+    } catch (e) { /* ignore glare / stale signals */ }
+  });
+
+  sock.on("rc_peer_left", () => {
+    cleanupCall();
+    show("search");
+    sock.emit("rc_find");   // they left — automatically look for the next person
+  });
+
+  sock.on("disconnect", () => {
+    cleanupCall();
+    releaseMic();
+    show("idle");
+    setError("Connection to the server was lost. Check your network and try again.");
+  });
+
+  // ---------------- buttons ----------------
+  $("btn-start").addEventListener("click", startSearch);
+  $("btn-cancel").addEventListener("click", () => { sock.emit("rc_cancel"); releaseMic(); show("idle"); });
+  $("btn-end").addEventListener("click", () => endCall(false));
+  $("btn-next").addEventListener("click", () => endCall(true));
+  $("btn-mute").addEventListener("click", () => {
+    muted = !muted;
+    if (localStream) localStream.getAudioTracks().forEach((t) => { t.enabled = !muted; });
+    $("btn-mute").classList.toggle("active", muted);
+    $("btn-mute").querySelector("small").textContent = muted ? "Unmute" : "Mute";
+  });
+
+  // leaving the page ends any call cleanly
+  window.addEventListener("beforeunload", () => { sock.emit("rc_hangup"); });
+})();
+</script>
+{% endblock %}

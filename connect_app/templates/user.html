@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ user.display_name }}{% endblock %}
+{% block content %}
+{% set u = user %}
+<div class="card profile-view">
+  <div class="person-head">
+    {{ avatar(u, "xl", presence=True) }}
+    <div>
+      <h2>{{ u.display_name }}, {{ u.age }}</h2>
+      <div class="muted">@{{ u.username }} · 📍 {{ u.city or "Somewhere" }} · joined {{ u.created_at[:10] }}
+        · <span class="presence-text {{ 'on' if is_online(u.id) }}" data-presence-text="{{ u.id }}">{{ 'Online' if is_online(u.id) else 'Offline' }}</span></div>
+    </div>
+  </div>
+  <h4>About</h4>
+  <p>{{ u.bio or "No bio yet." }}</p>
+  <h4>Interests</h4>
+  <div class="tags">
+    {% for t in u.interests | interests %}<span class="tag {{ 'shared' if t in shared }}">{{ t }}</span>{% else %}<span class="muted">None listed</span>{% endfor %}
+  </div>
+  {% if shared %}<p class="muted">You both like {{ shared | sort | join(", ") }}.</p>{% endif %}
+  <div class="actions">
+    {% with next_url = request.path %}{% include "_friend_button.html" %}{% endwith %}
+    {% if status == 'friends' %}
+    <form method="post" action="{{ url_for('remove_friend', user_id=u.id) }}" class="inline" onsubmit="return confirm('Remove {{ u.display_name }} from friends?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.path }}">
+      <button class="btn btn-small btn-ghost">Unfriend</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('block_user', user_id=u.id) }}" class="inline" onsubmit="return confirm('Block {{ u.display_name }}?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-small btn-danger">Block</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

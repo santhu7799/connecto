@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Friends{% endblock %}
+{% block content %}
+{% if incoming %}
+<h2>Friend requests <span class="badge">{{ incoming | length }}</span></h2>
+<div class="list card">
+  {% for u in incoming %}
+  <div class="list-row">
+    {{ avatar(u) }}
+    <div class="grow"><a class="name" href="{{ url_for('view_user', user_id=u.id) }}">{{ u.display_name }}</a>
+      <div class="muted">📍 {{ u.city or "Somewhere" }} · {{ (u.interests | interests)[:3] | join(", ") }}</div></div>
+    <form method="post" action="{{ url_for('accept_request', user_id=u.id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-small">Accept</button></form>
+    <form method="post" action="{{ url_for('remove_friend', user_id=u.id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-small btn-ghost">Decline</button></form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Your friends</h2>
+<div class="list card">
+  {% for u in friends %}
+  <a class="list-row clickable" href="{{ url_for('chat', user_id=u.id) }}">
+    {{ avatar(u, "md", presence=True) }}
+    <div class="grow"><span class="name">{{ u.display_name }}</span>
+      <div class="muted ellipsis">{{ u.last_msg or "Say hello 👋" }}</div></div>
+    {% if u.unread %}<span class="badge">{{ u.unread }}</span>{% endif %}
+  </a>
+  {% else %}
+  <p class="muted pad">No friends yet — head to <a href="{{ url_for('discover') }}">Discover</a> to find people.</p>
+  {% endfor %}
+</div>
+
+{% if outgoing %}
+<h3>Sent requests</h3>
+<div class="list card">
+  {% for u in outgoing %}
+  <div class="list-row">
+    {{ avatar(u, "sm") }}
+    <div class="grow"><a href="{{ url_for('view_user', user_id=u.id) }}">{{ u.display_name }}</a> <span class="muted">· waiting</span></div>
+    <form method="post" action="{{ url_for('remove_friend', user_id=u.id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-small btn-ghost">Cancel</button></form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

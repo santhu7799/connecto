@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Make new friends{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Find friends who get you.</h1>
+  <p>Connect matches you with people who share your interests — then you chat, meet up, and grow your circle.</p>
+  <div class="hero-actions">
+    <a class="btn" href="{{ url_for('register') }}">Create your profile</a>
+    <a class="btn btn-ghost" href="{{ url_for('login') }}">I have an account</a>
+  </div>
+</section>
+<section class="features">
+  <div class="card"><h3>🎯 Interest matching</h3><p>See who shares your hobbies, ranked by how much you have in common.</p></div>
+  <div class="card"><h3>🤝 Friend requests</h3><p>Only people you accept can message you — no spam.</p></div>
+  <div class="card"><h3>💬 Real-time chat</h3><p>Talk with your friends right in the app.</p></div>
+  <div class="card"><h3>🎙️ RandomCall</h3><p>Feeling spontaneous? Get matched with a random person online for a live voice call.</p></div>
+  <div class="card"><h3>🛡️ Stay safe</h3><p>Block anyone in one tap. Connect is for adults 18+.</p></div>
+</section>
+{% endblock %}

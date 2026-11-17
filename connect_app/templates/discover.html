@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Discover{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>Discover people</h2>
+  <form class="filters" method="get">
+    <input name="q" value="{{ q }}" placeholder="Search name or interest">
+    <input name="city" value="{{ city }}" placeholder="City">
+    <button class="btn btn-small">Search</button>
+    {% if q or city %}<a href="{{ url_for('discover') }}" class="muted">Clear</a>{% endif %}
+  </form>
+</div>
+
+{% if not g.user.interests %}
+<div class="flash flash-info">Add some interests to <a href="{{ url_for('edit_profile') }}">your profile</a> to get better matches.</div>
+{% endif %}
+
+<div class="grid">
+  {% for p in people %}
+  {% set u = p.user %}
+  <div class="card person">
+    <div class="person-head">
+      {{ avatar(u, "lg", presence=True) }}
+      <div>
+        <a class="name" href="{{ url_for('view_user', user_id=u.id) }}">{{ u.display_name }}</a>, {{ u.age }}
+        <div class="muted">📍 {{ u.city or "Somewhere" }}{% if p.same_city %} · <b>near you</b>{% endif %}</div>
+      </div>
+      {% if p.match %}<span class="match">{{ p.match }}% match</span>{% endif %}
+    </div>
+    <p class="bio">{{ u.bio or "No bio yet." }}</p>
+    <div class="tags">
+      {% for t in p.shared %}<span class="tag shared">{{ t }}</span>{% endfor %}
+      {% for t in p.others %}<span class="tag">{{ t }}</span>{% endfor %}
+    </div>
+    <div class="actions">
+      {% with status = p.status, next_url = request.full_path %}{% include "_friend_button.html" %}{% endwith %}
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">No one found. Try a different search, or invite your friends to join!</p>
+  {% endfor %}
+</div>
+{% endblock %}
